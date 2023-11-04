@@ -440,8 +440,11 @@ def reshape_practice(x: Tensor) -> Tensor:
     #                      TODO: Implement this function                     #
     ##########################################################################
     # Replace "pass" statement with your code
+    """
     y = x.view(3, 8)
     y = y.transpose()
+    """
+    pass
     ##########################################################################
     #                            END OF YOUR CODE                            #
     ##########################################################################
@@ -615,7 +618,12 @@ def normalize_columns(x: Tensor) -> Tensor:
     #                      TODO: Implement this function                     #
     ##########################################################################
     # Replace "pass" statement with your code
-    pass
+    mean = x.mean(dim=0)
+    std = x.std(dim=0)
+    idx = range(len(std))
+    #add a checkpoint here to ensure that each element is != 0
+    print(mean, std)
+    y = (x - mean) / std
     ##########################################################################
     #                            END OF YOUR CODE                            #
     ##########################################################################
@@ -662,7 +670,11 @@ def mm_on_gpu(x: Tensor, w: Tensor) -> Tensor:
     #                      TODO: Implement this function                     #
     ##########################################################################
     # Replace "pass" statement with your code
-    pass
+    # Check this part on GPU: not checked yet
+    x = x.to('cuda')
+    w = w.to('cuda')
+    y = x.mm(w)
+    y = y.to('cpu')
     ##########################################################################
     #                            END OF YOUR CODE                            #
     ##########################################################################
