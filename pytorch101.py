@@ -708,7 +708,7 @@ def challenge_mean_tensors(xs: List[Tensor], ls: Tensor) -> Tensor:
     # mean values as a tensor in `y`.                                        #
     ##########################################################################
     # Replace "pass" statement with your code
-    pass
+    y = torch.mean(xs, 1, True)
     ##########################################################################
     #                            END OF YOUR CODE                            #
     ##########################################################################
@@ -748,7 +748,15 @@ def challenge_get_uniques(x: torch.Tensor) -> Tuple[Tensor, Tensor]:
     # O(N) memory.                                                           #
     ##########################################################################
     # Replace "pass" statement with your code
-    pass
+    sorted_x, sorted_indices = torch.sort(x)
+
+    # Create a mask for unique values
+    mask = torch.cat((torch.tensor([True], dtype=torch.bool), sorted_x[1:] != sorted_x[:-1]))
+    print("sorted x: ", sorted_x)
+    print("Mask: ", mask)
+    # Get unique values and their indices
+    uniques = sorted_x[mask]
+    indices = sorted_indices[mask]
     ##########################################################################
     #                            END OF YOUR CODE                            #
     ##########################################################################
