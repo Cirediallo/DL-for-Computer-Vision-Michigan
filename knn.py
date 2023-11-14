@@ -3,7 +3,7 @@ Implements a K-Nearest Neighbor classifier in PyTorch.
 """
 import torch
 from typing import Dict, List
-
+import gc
 
 def hello():
     """
@@ -172,10 +172,12 @@ def compute_distances_no_loops(x_train: torch.Tensor, x_test: torch.Tensor):
     # Replace "pass" statement with your code
     x_train_vector = x_train.view(num_train, 1, -1)
     x_test_vector = x_test.view(1, num_test, -1)
-    print("x_train vectorization shape: ",x_train_vector.shape)
-    print("x_test vectorization shape: ",x_test_vector.shape)
+    x_train_vector = x_train_vector.to('cuda')
+    x_test_vector = x_test_vector.to('cuda')
+    #print("x_train vectorization shape: ",x_train_vector.shape)
+    #print("x_test vectorization shape: ",x_test_vector.shape)
     squared_diff = (x_train_vector - x_test_vector) ** 2
-    print("squared_diff shape: ", squared_diff.shape)
+    #print("squared_diff shape: ", squared_diff.shape)
     dists = torch.sum(squared_diff, dim=2)
     ##########################################################################
     #                           END OF YOUR CODE                             #
@@ -221,19 +223,22 @@ def predict_labels(dists: torch.Tensor, y_train: torch.Tensor, k: int = 1):
     # Replace "pass" statement with your code
     # Iterate over each test sample
     for j in range(num_test):
+      # ====== clear the memory
+      torch.cuda.empty_cache()
+      gc.collect()
       
       # Find the sorted indices of the k-nearest neighbors for the j-th test sample
       nearest_indices = torch.argsort(dists[:, j])[:k]
-      print("K first indices ", nearest_indices[:k])
+      #print("K first indices ", nearest_indices[:k])
       
       # Get indices in the Ground truth
       nearest_labels = y_train[nearest_indices]
-      print("nearest labels: ", nearest_labels)
+      #print("nearest labels: ", nearest_labels)
 
       # Count the occurrences for each label
       label_counts = torch.bincount(nearest_labels)
-      print("label occurrences: ", label_counts)
-      print("==========================")
+      #print("label occurrences: ", label_counts)
+      #print("==========================")
 
       # Return the maximum count or the smallest indices between the maximum counts
       y_pred[j] = torch.argmax(label_counts)
@@ -242,10 +247,15 @@ def predict_labels(dists: torch.Tensor, y_train: torch.Tensor, k: int = 1):
     ##########################################################################
     return y_pred
 
+# modify the class to make it possible to transfer it to GPU
+import torch.nn as nn
 
-class KnnClassifier:
+class KnnClassifier(nn.Module):
 
+    #def __init__(self, x_train: torch.Tensor, y_train: torch.Tensor):
     def __init__(self, x_train: torch.Tensor, y_train: torch.Tensor):
+        super(KnnClassifier, self).__init__()
+
         """
         Create a new K-Nearest Neighbor classifier with the specified training
         data. In the initializer we simply memorize the provided training data.
@@ -260,8 +270,8 @@ class KnnClassifier:
         # `self.x_train` and `self.y_train`, accordingly.                    #
         ######################################################################
         # Replace "pass" statement with your code
-        self.x_train = x_train 
-        self.y_train = y_train
+        self.x_train = x_train.to('cuda')
+        self.y_train = y_train.to('cuda')
         ######################################################################
         #                         END OF YOUR CODE                           #
         ######################################################################
@@ -278,6 +288,7 @@ class KnnClassifier:
             y_test_pred: Tensor of shape (num_test,) giving predicted labels
                 for the test samples.
         """
+        x_test = x_test.to('cuda') # added
         y_test_pred = None
         ######################################################################
         # TODO: Implement this method. You should use the functions you      #
@@ -287,7 +298,6 @@ class KnnClassifier:
         # Replace "pass" statement with your code
         dists = compute_distances_no_loops(self.x_train, x_test)
         y_test_pred = predict_labels(dists, self.y_train, k)
-
         ######################################################################
         #                         END OF YOUR CODE                           #
         ######################################################################
@@ -315,7 +325,12 @@ class KnnClassifier:
             accuracy: Accuracy of this classifier on the test data, as a
                 percent. Python float in the range [0, 100]
         """
+        torch.cuda.empty_cache()
+        gc.collect()
+        x_test = x_test.to('cuda')
+        y_test = y_test.to('cuda')
         y_test_pred = self.predict(x_test, k=k)
+        y_test_pred = y_test_pred.to('cuda')
         num_samples = x_test.shape[0]
         num_correct = (y_test == y_test_pred).sum().item()
         accuracy = 100.0 * num_correct / num_samples
@@ -361,7 +376,9 @@ def knn_cross_validate(
     # HINT: torch.chunk                                                      #
     ##########################################################################
     # Replace "pass" statement with your code
-    pass
+    x_train_folds = torch.chunk(x_train, num_folds)
+    y_train_folds = torch.chunk(y_train, num_folds)
+
     ##########################################################################
     #                           END OF YOUR CODE                             #
     ##########################################################################
@@ -371,7 +388,6 @@ def knn_cross_validate(
     # k_to_accuracies[k] should be a list of length num_folds giving the
     # different accuracies we found trying `KnnClassifier`s using k neighbors.
     k_to_accuracies = {}
-
     ##########################################################################
     # TODO: Perform cross-validation to find the best value of k. For each   #
     # value of k in k_choices, run the k-NN algorithm `num_folds` times; in  #
@@ -382,7 +398,26 @@ def knn_cross_validate(
     # HINT: torch.cat                                                        #
     ##########################################################################
     # Replace "pass" statement with your code
-    pass
+    
+    for fold in range(num_folds):
+      torch.cuda.empty_cache()
+      gc.collect()
+      tmp_acc = list()
+
+      x_train_i_fold_list = x_train_folds[:fold] + x_train_folds[fold+1:]
+      y_train_i_fold_list = y_train_folds[:fold] + y_train_folds[fold+1:]
+
+      x_train_i_fold = torch.cat(x_train_i_fold_list, dim=0)
+      y_train_i_fold = torch.cat(y_train_i_fold_list, dim=0)
+
+      x_train_i_fold = x_train_i_fold.to('cuda')
+      y_train_i_fold = y_train_i_fold.to('cuda')
+
+      for k in range(len(k_choices)):
+        classifier = KnnClassifier(x_train_i_fold, y_train_i_fold)
+        acc = classifier.check_accuracy(x_train_folds[fold], y_train_folds[fold])
+        tmp_acc.append(acc)
+      k_to_accuracies[fold] = tmp_acc
     ##########################################################################
     #                           END OF YOUR CODE                             #
     ##########################################################################
@@ -412,7 +447,12 @@ def knn_get_best_k(k_to_accuracies: Dict[int, List]):
     # the value of k that has the highest mean accuracy accross all folds.   #
     ##########################################################################
     # Replace "pass" statement with your code
-    pass
+    max_avg = 0
+    for idx, lst in k_to_accuracies.items():
+      tmp_avg = sum(lst)/len(lst)
+      if tmp_avg > max_avg:
+        max_avg = tmp_avg
+        best_k = idx
     ##########################################################################
     #                           END OF YOUR CODE                             #
     ##########################################################################
